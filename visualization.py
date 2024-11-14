@@ -261,3 +261,144 @@ with st.expander("🔄 更新借用状态为归还"):
         else:
             st.warning("请输入借用记录 ID")
 
+# 获取用户数据的函数
+def fetch_users():
+    try:
+        response = requests.get(f"{API_URL}/users")
+        if response.status_code == 200:
+            return response.json()
+        else:
+            st.error("无法获取用户列表")
+            return []
+    except Exception as e:
+        st.error(f"请求失败: {e}")
+        return []
+
+
+# 显示分页用户列表
+def display_users_page(users):
+    total_users = len(users)
+    total_pages = max(1, math.ceil(total_users / ITEMS_PER_PAGE))  # 至少有一页
+
+    # 确保页码在有效范围内
+    st.session_state.user_page = min(max(1, st.session_state.get("user_page", 1)), total_pages)
+
+    # 当前页的起始和终止索引
+    start_index = (st.session_state.user_page - 1) * ITEMS_PER_PAGE
+    end_index = start_index + ITEMS_PER_PAGE
+    page_users = users[start_index:end_index]
+
+    # 使用 Markdown 表格显示用户数据
+    table_md = "| ID | 姓名 | 联系方式 | 身份 |\n"
+    table_md += "|----|------|----------|------|\n"
+    for user in page_users:
+        table_md += f"| {user['userId']} | {user['name']} | {user['contact']} | {user['identity']} |\n"
+    st.markdown(table_md)
+
+    # 分页按钮
+    col1, col2, col3 = st.columns([1, 2, 1])
+    with col1:
+        if st.button("⬅️ 上一页", key="user_prev", disabled=(st.session_state.user_page <= 1)):
+            st.session_state.user_page -= 1
+    with col3:
+        if st.button("下一页 ➡️", key="user_next", disabled=(st.session_state.user_page >= total_pages)):
+            st.session_state.user_page += 1
+
+    # 显示当前页码和总页数
+    st.write(f"第 {st.session_state.user_page} 页，共 {total_pages} 页")
+
+
+# 用户管理区域
+with st.expander("📋 用户列表", expanded=True):
+    users = fetch_users()
+    if users:
+        display_users_page(users)
+
+# 查询特定用户信息
+with st.expander("🔍 查询用户"):
+    user_id = st.text_input("输入用户 ID", key="search_user_id")
+    if st.button("查询用户", key="search_user_button"):
+        if user_id:
+            try:
+                response = requests.get(f"{API_URL}/users/{user_id}")
+                if response.status_code == 200:
+                    user = response.json()
+                    st.write(f"**姓名:** {user['name']}")
+                    st.write(f"**联系方式:** {user['contact']}")
+                    st.write(f"**身份:** {user['identity']}")
+                elif response.status_code == 404:
+                    st.warning("未找到该用户")
+                else:
+                    st.error("无法查询用户")
+            except Exception as e:
+                st.error(f"请求失败: {e}")
+        else:
+            st.warning("请输入用户 ID")
+
+# 添加新用户
+with st.expander("➕ 添加新用户"):
+    new_name = st.text_input("姓名", key="new_user_name")
+    new_contact = st.text_input("联系方式", key="new_user_contact")
+    new_identity = st.selectbox("身份", options=["管理员", "普通用户"], key="new_user_identity")
+    new_password = st.text_input("密码", type="password", key="new_user_password")
+
+    if st.button("添加用户", key="add_user_button"):
+        if new_name and new_contact and new_identity and new_password:
+            new_user = {
+                "name": new_name,
+                "contact": new_contact,
+                "identity": new_identity,
+                "password": new_password
+            }
+            try:
+                response = requests.post(f"{API_URL}/users", json=new_user)
+                if response.status_code == 201:
+                    st.success(f"用户 '{new_name}' 添加成功!")
+                    st.session_state.user_page = 1  # 添加新用户后重置到第一页
+                else:
+                    st.error("添加用户失败")
+            except Exception as e:
+                st.error(f"请求失败: {e}")
+        else:
+            st.warning("请填写所有用户信息")
+
+# 更新用户信息
+with st.expander("📝 更新用户信息"):
+    update_user_id = st.text_input("要更新的用户 ID", key="update_user_id")
+    update_contact = st.text_input("新联系方式", key="update_user_contact")
+
+    if st.button("更新用户", key="update_user_button"):
+        if update_user_id and update_contact:
+            update_data = {"contact": update_contact}
+            try:
+                response = requests.put(f"{API_URL}/users/{update_user_id}", json=update_data)
+                if response.status_code == 200:
+                    st.success(f"用户 ID {update_user_id} 更新成功!")
+                elif response.status_code == 404:
+                    st.warning("未找到该用户")
+                else:
+                    st.error("更新用户失败")
+            except Exception as e:
+                st.error(f"请求失败: {e}")
+        else:
+            st.warning("请填写用户 ID 和新联系方式")
+
+# 删除用户
+with st.expander("❌ 删除用户"):
+    delete_user_id = st.text_input("要删除的用户 ID", key="delete_user_id")
+
+    if st.button("删除用户", key="delete_user_button"):
+        if delete_user_id:
+            try:
+                response = requests.delete(f"{API_URL}/users/{delete_user_id}")
+                if response.status_code == 204:
+                    st.success(f"用户 ID {delete_user_id} 删除成功!")
+                    st.session_state.user_page = 1  # 删除用户后重置到第一页
+                elif response.status_code == 404:
+                    st.warning("未找到该用户")
+                else:
+                    st.error("删除用户失败")
+            except Exception as e:
+                st.error(f"请求失败: {e}")
+        else:
+            st.warning("请输入用户 ID")
