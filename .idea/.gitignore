@@ -11,3 +11,5 @@
 /modules.xml
 /misc.xml
 /encodings.xml
+__pycache__/
+*.pyc
